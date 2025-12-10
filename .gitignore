@@ -44,3 +44,8 @@ playground.xcworkspace
 
 # CoreML temp/derived artifacts (keep the actual .mlpackage)
 *.mlmodelc
+
+*.mlpackage
+
+*.github
+*Assets.xcassets
