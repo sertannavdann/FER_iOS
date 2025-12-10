@@ -1,0 +1,22 @@
+name: FacialExpressionDetection_iOS
+options:
+  bundleIdPrefix: com.sertanavdan
+targets:
+  FacialExpressionDetection_iOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.2"
+    sources:
+      - path: .
+        excludes:
+          - project.yml
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.sertanavdan.FacialExpressionDetection-iOS
+        INFOPLIST_KEY_CFBundleDisplayName: "Facial Expression"
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_NSCameraUsageDescription: "This app requires camera access to detect facial expressions."
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+        DEVELOPMENT_TEAM: "" # User needs to set this

@@ -1,0 +1,46 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# User-specific Xcode settings
+*.xcuserdatad/
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# Cocoapods (if you ever add it)
+Pods/
+Podfile.lock
+
+# Carthage (if you ever add it)
+Carthage/Build/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
+# IDE / editor
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# CoreML temp/derived artifacts (keep the actual .mlpackage)
+*.mlmodelc

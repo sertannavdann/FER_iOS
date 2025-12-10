@@ -1,0 +1,175 @@
+import SwiftUI
+import Vision
+import CoreML
+import ImageIO
+
+// MARK: - FER Predictor using Core ML
+class FERPredictor: ObservableObject {
+    private var model: VNCoreMLModel?
+    private var request: VNCoreMLRequest?
+    @Published var faceOutputs: [FacePrediction] = []
+    @Published var probabilityHistory: [[Float]] = []
+    
+    private var smoothers: [Int: TemporalSmoother] = [:]
+    private var currentSettings: InferenceSettings
+    private let historyLimit = 75  // Reduce from 120 for 5 seconds at 15fps
+    
+    init(settings: InferenceSettings) {
+        self.currentSettings = settings
+        loadModel()
+        update(settings: settings)
+    }
+
+    func update(settings: InferenceSettings) {
+        currentSettings = settings
+        // Reset smoothers with new settings for each active face
+        smoothers = smoothers.mapValues { _ in TemporalSmoother(settings: settings) }
+    }
+    
+    private func loadModel() {
+        // Try to load the model from the app bundle
+        guard let modelURL = Bundle.main.url(forResource: "FER_Model", withExtension: "mlmodelc") ??
+                             Bundle.main.url(forResource: "FER_Model", withExtension: "mlpackage") else {
+            print("Model not found in bundle")
+            return
+        }
+        
+        do {
+            let compiledURL: URL
+            if modelURL.pathExtension == "mlpackage" || modelURL.pathExtension == "mlmodel" {
+                compiledURL = try MLModel.compileModel(at: modelURL)
+            } else {
+                compiledURL = modelURL
+            }
+            
+            let mlModel = try MLModel(contentsOf: compiledURL)
+            model = try VNCoreMLModel(for: mlModel)
+            
+            let coreRequest = VNCoreMLRequest(model: model!)
+            coreRequest.imageCropAndScaleOption = .scaleFill
+            request = coreRequest
+            
+            print("Model loaded successfully")
+        } catch {
+            print("Error loading model: \(error)")
+        }
+    }
+    
+    func predict(pixelBuffer: CVPixelBuffer, faces: [DetectedFace], orientation: CGImagePropertyOrientation = .up) {
+        guard let request = request else { return }
+        guard let targetFace = faces.max(by: { $0.boundingBox.area < $1.boundingBox.area }) else {
+            DispatchQueue.main.async {
+                self.faceOutputs = []
+            }
+            return
+        }
+        // Use the same orientation that was used for face detection to ensure regionOfInterest aligns correctly
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
+        ensureSmoothers(count: 1)
+        request.regionOfInterest = targetFace.boundingBox
+
+        do {
+            try handler.perform([request])
+        } catch {
+            print("Prediction error: \(error)")
+            return
+        }
+
+        guard let raw = extractProbabilities(from: request) else { return }
+        let smoothed = smoothers[0]?.smooth(raw) ?? raw
+
+        guard let maxIdx = smoothed.indices.max(by: { smoothed[$0] < smoothed[$1] }) else { return }
+        let prediction = FacePrediction(
+            boundingBox: targetFace.boundingBox,
+            depthMeters: targetFace.depthMeters,
+            probabilities: smoothed,
+            dominantEmotion: emotionClasses[maxIdx],
+            dominantEmoji: emotionEmojis[maxIdx],
+            confidence: smoothed[maxIdx],
+            yaw: targetFace.yaw,
+            pitch: targetFace.pitch,
+            roll: targetFace.roll
+        )
+
+        var updatedHistory = probabilityHistory
+        updatedHistory.append(smoothed)
+        if updatedHistory.count > historyLimit {
+            updatedHistory.removeFirst()
+        }
+
+        DispatchQueue.main.async {
+            self.probabilityHistory = updatedHistory
+            self.faceOutputs = [prediction]
+        }
+    }
+    
+    private func extractProbabilities(from request: VNCoreMLRequest) -> [Float]? {
+        var rawProbabilities: [Float]?
+        if let results = request.results as? [VNCoreMLFeatureValueObservation],
+           let first = results.first,
+           let multiArray = first.featureValue.multiArrayValue {
+            rawProbabilities = extractProbabilities(from: multiArray)
+        } else if let results = request.results as? [VNClassificationObservation] {
+            rawProbabilities = classificationToProbabilities(results)
+        }
+        guard var probs = rawProbabilities, probs.count == 7 else { return nil }
+        probs = softmax(probs)
+        return probs
+    }
+    
+    private func extractProbabilities(from multiArray: MLMultiArray) -> [Float] {
+        var result = [Float]()
+        for i in 0..<multiArray.count {
+            result.append(Float(truncating: multiArray[i]))
+        }
+        return result
+    }
+    
+    private func classificationToProbabilities(_ observations: [VNClassificationObservation]) -> [Float] {
+        var probs = [Float](repeating: 0, count: 7)
+        for obs in observations {
+            if let idx = emotionClasses.firstIndex(of: obs.identifier.lowercased()) {
+                probs[idx] = obs.confidence
+            }
+        }
+        return probs
+    }
+    
+    private func softmax(_ logits: [Float]) -> [Float] {
+        let maxLogit = logits.max() ?? 0
+        let exps = logits.map { exp($0 - maxLogit) }
+        let sum = exps.reduce(0, +)
+        return exps.map { $0 / sum }
+    }
+    
+    func reset() {
+        smoothers = [:]
+    }
+
+    private func ensureSmoothers(count: Int) {
+        if smoothers.count != count {
+            var new: [Int: TemporalSmoother] = [:]
+            for idx in 0..<count {
+                new[idx] = TemporalSmoother(settings: currentSettings)
+            }
+            smoothers = new
+        }
+    }
+}
+
+private extension CGRect {
+    var area: CGFloat { width * height }
+}
+
+struct FacePrediction: Identifiable {
+    let id = UUID()
+    let boundingBox: CGRect
+    let depthMeters: Float?
+    let probabilities: [Float]
+    let dominantEmotion: String
+    let dominantEmoji: String
+    let confidence: Float
+    let yaw: Float?      // Head rotation left/right (degrees)
+    let pitch: Float?    // Head tilt up/down (degrees)
+    let roll: Float?     // Head rotation clockwise/counter (degrees)
+}
