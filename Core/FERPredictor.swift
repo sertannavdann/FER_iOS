@@ -3,6 +3,7 @@ import Vision
 import CoreML
 import ImageIO
 import simd
+import CoreImage
 
 // MARK: - FER Predictor using Core ML
 class FERPredictor: ObservableObject {
@@ -65,10 +66,23 @@ class FERPredictor: ObservableObject {
             return
         }
         
-        // Use the same orientation that was used for face detection
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
         ensureSmoothers(count: 1)
-        request.regionOfInterest = targetFace.boundingBox
+        
+        // Clamp bounding box to [0, 1] to avoid Vision errors
+        let bbox = targetFace.boundingBox
+        let clampedRect = CGRect(
+            x: max(0, bbox.minX),
+            y: max(0, bbox.minY),
+            width: min(1.0 - max(0, bbox.minX), bbox.width),
+            height: min(1.0 - max(0, bbox.minY), bbox.height)
+        )
+        request.regionOfInterest = clampedRect
+
+        // Explicitly convert to grayscale to match C++ implementation (RGB -> Gray -> RGB)
+        // This ensures the model receives the expected feature distribution
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let grayscale = ciImage.applyingFilter("CIPhotoEffectMono")
+        let handler = VNImageRequestHandler(ciImage: grayscale, orientation: orientation, options: [:])
 
         do {
             try handler.perform([request])

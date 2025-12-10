@@ -46,8 +46,7 @@ struct ContentView: View {
                 SpatialFaceWidget(
                     prediction: predictions.first,
                     history: predictor.probabilityHistory,
-                    geometry: geometry,
-                    show3DModel: settings.show3DModel
+                    geometry: geometry
                 )
                 
                 // UI Overlay

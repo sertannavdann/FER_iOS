@@ -74,12 +74,12 @@ struct SettingsSheet: View {
                 Section("Smoothing") {
                     Stepper("Ring Buffer: \(settings.ringBufferSize)", value: Binding(
                         get: { settings.ringBufferSize },
-                        set: { settings = InferenceSettings(ringBufferSize: $0, emaAlpha: settings.emaAlpha, neutralBoost: settings.neutralBoost, framesForAverage: settings.framesForAverage, show3DModel: settings.show3DModel) }
+                        set: { settings = InferenceSettings(ringBufferSize: $0, emaAlpha: settings.emaAlpha, neutralBoost: settings.neutralBoost, framesForAverage: settings.framesForAverage) }
                     ), in: 1...10)
 
                     Slider(value: Binding(
                         get: { settings.emaAlpha },
-                        set: { settings = InferenceSettings(ringBufferSize: settings.ringBufferSize, emaAlpha: $0, neutralBoost: settings.neutralBoost, framesForAverage: settings.framesForAverage, show3DModel: settings.show3DModel) }
+                        set: { settings = InferenceSettings(ringBufferSize: settings.ringBufferSize, emaAlpha: $0, neutralBoost: settings.neutralBoost, framesForAverage: settings.framesForAverage) }
                     ), in: 0.05...0.5) {
                         Text("EMA Alpha")
                     }
@@ -87,7 +87,7 @@ struct SettingsSheet: View {
 
                     Slider(value: Binding(
                         get: { settings.neutralBoost },
-                        set: { settings = InferenceSettings(ringBufferSize: settings.ringBufferSize, emaAlpha: settings.emaAlpha, neutralBoost: $0, framesForAverage: settings.framesForAverage, show3DModel: settings.show3DModel) }
+                        set: { settings = InferenceSettings(ringBufferSize: settings.ringBufferSize, emaAlpha: settings.emaAlpha, neutralBoost: $0, framesForAverage: settings.framesForAverage) }
                     ), in: 1.0...3.0) {
                         Text("Neutral Boost")
                     }
@@ -95,18 +95,8 @@ struct SettingsSheet: View {
 
                     Stepper("Frames for Avg: \(settings.framesForAverage)", value: Binding(
                         get: { settings.framesForAverage },
-                        set: { settings = InferenceSettings(ringBufferSize: settings.ringBufferSize, emaAlpha: settings.emaAlpha, neutralBoost: settings.neutralBoost, framesForAverage: $0, show3DModel: settings.show3DModel) }
+                        set: { settings = InferenceSettings(ringBufferSize: settings.ringBufferSize, emaAlpha: settings.emaAlpha, neutralBoost: settings.neutralBoost, framesForAverage: $0) }
                     ), in: 1...10)
-                }
-
-                Section("Visualization") {
-                    Toggle("Show 3D Face Model", isOn: Binding(
-                        get: { settings.show3DModel },
-                        set: { settings = InferenceSettings(ringBufferSize: settings.ringBufferSize, emaAlpha: settings.emaAlpha, neutralBoost: settings.neutralBoost, framesForAverage: settings.framesForAverage, show3DModel: $0) }
-                    ))
-                    Text("Display a 3D ellipsoid that rotates with face orientation")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
             }
             .navigationTitle("Inference Settings")

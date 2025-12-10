@@ -57,6 +57,7 @@ class FrontVisionPipeline: NSObject, CameraPipeline {
     private func setupARSession() {
         arSession = ARSession()
         arSession?.delegate = self
+        arSession?.delegateQueue = processingQueue
     }
 
     private func createFaceTrackingConfiguration() -> ARFaceTrackingConfiguration {

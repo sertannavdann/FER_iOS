@@ -5,7 +5,7 @@ class TemporalSmoother {
     private var emaState: [Float] = []
     private var history: [[Float]] = []
     private var settings: InferenceSettings
-    private let neutralIndex = 4 // neutral is index 4 in the correct class order
+    private let neutralIndex = 3 // neutral is index 3 in the correct class order
     
     init(settings: InferenceSettings) {
         self.settings = settings
@@ -41,22 +41,29 @@ class TemporalSmoother {
             history.removeFirst()
         }
         
-        return meanFromRecentFrames()
+        return medianFromRecentFrames()
     }
     
-    private func meanFromRecentFrames() -> [Float] {
+    private func medianFromRecentFrames() -> [Float] {
         guard !history.isEmpty, let first = history.first else { return emaState }
         let window = max(1, min(settings.framesForAverage, history.count))
-        var sums = [Float](repeating: 0, count: first.count)
         let start = history.count - window
-        for i in start..<history.count {
-            let frame = history[i]
-            for c in 0..<frame.count {
-                sums[c] += frame[c]
+        
+        var medians = [Float](repeating: 0, count: first.count)
+        
+        for c in 0..<first.count {
+            var values: [Float] = []
+            for i in start..<history.count {
+                if c < history[i].count {
+                    values.append(history[i][c])
+                }
+            }
+            values.sort()
+            if !values.isEmpty {
+                medians[c] = values[values.count / 2]
             }
         }
-        let denom = Float(window)
-        return sums.map { $0 / denom }
+        return medians
     }
     
     func reset() {

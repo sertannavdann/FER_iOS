@@ -48,6 +48,7 @@ class BackARVisionPipeline: NSObject, CameraPipeline {
 
         arSession = ARSession()
         arSession?.delegate = self
+        arSession?.delegateQueue = processingQueue
     }
 
     private func createARConfiguration() -> ARWorldTrackingConfiguration {

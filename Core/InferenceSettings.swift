@@ -6,14 +6,12 @@ struct InferenceSettings: Codable, RawRepresentable, Equatable {
     let emaAlpha: Double
     let neutralBoost: Double
     let framesForAverage: Int
-    let show3DModel: Bool
 
-    init(ringBufferSize: Int = 3, emaAlpha: Double = 0.15, neutralBoost: Double = 2.0, framesForAverage: Int = 3, show3DModel: Bool = true) {
+    init(ringBufferSize: Int = 60, emaAlpha: Double = 0.1, neutralBoost: Double = 2.0, framesForAverage: Int = 30) {
         self.ringBufferSize = ringBufferSize
         self.emaAlpha = emaAlpha
         self.neutralBoost = neutralBoost
         self.framesForAverage = framesForAverage
-        self.show3DModel = show3DModel
     }
 
     init?(rawValue: Data) {
@@ -29,7 +27,6 @@ struct InferenceSettings: Codable, RawRepresentable, Equatable {
         lhs.ringBufferSize == rhs.ringBufferSize &&
         lhs.emaAlpha == rhs.emaAlpha &&
         lhs.neutralBoost == rhs.neutralBoost &&
-        lhs.framesForAverage == rhs.framesForAverage &&
-        lhs.show3DModel == rhs.show3DModel
+        lhs.framesForAverage == rhs.framesForAverage
     }
 }

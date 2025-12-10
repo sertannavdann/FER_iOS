@@ -6,7 +6,6 @@ struct SpatialFaceWidget: View {
     let prediction: FacePrediction?
     let history: [[Float]]
     let geometry: GeometryProxy
-    let show3DModel: Bool
 
     @State private var smoothedPosition: CGPoint = .zero
     private let positionAlpha: CGFloat = 0.2
@@ -16,18 +15,6 @@ struct SpatialFaceWidget: View {
             let widgetFrame = calculateWidgetFrame(for: prediction, in: geometry.size)
 
             VStack(spacing: 12) {
-                // 3D Face Model (top section)
-                if show3DModel {
-                    FaceModelView(
-                        yaw: prediction.yaw,
-                        pitch: prediction.pitch,
-                        roll: prediction.roll
-                    )
-                    .frame(width: widgetFrame.width, height: widgetFrame.width * 0.8)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-                }
-
                 // Probability Timeline Graph (bottom section)
                 ProbabilityTimelineGraph(history: history)
                     .frame(width: widgetFrame.width)
@@ -56,8 +43,7 @@ struct SpatialFaceWidget: View {
 
         // Height depends on whether 3D model is shown
         let graphHeight: CGFloat = 240  // Fixed graph height
-        let modelHeight = show3DModel ? (width * 0.8) : 0
-        let height = modelHeight + graphHeight + (show3DModel ? 20 : 8)  // +20 for spacing if model shown
+        let height = graphHeight + 8
 
         // Position: top-center of face, offset upward by half widget height
         let x = faceRect.midX  // Center horizontally on face
@@ -116,8 +102,7 @@ struct SpatialFaceWidget: View {
                     roll: 5
                 ),
                 history: Array(repeating: [0.2, 0.4, 0.8, 0.1, 0.6, 0.3, 0.5], count: 50),
-                geometry: geometry,
-                show3DModel: true
+                geometry: geometry
             )
         }
     }
