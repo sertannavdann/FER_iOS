@@ -11,11 +11,9 @@
 		026B7D89A60908A574D9D9FC /* FacialExpressionDetection_iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866635FDC86882EF0DC9927A /* FacialExpressionDetection_iOSApp.swift */; };
 		106F7EAF372B627EF7018715 /* FER_Model.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = A27C9E47357900D29F0DC6AA /* FER_Model.mlpackage */; };
 		22EF20BEACB8C3D42183A166 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67789EF875A2FDEF7A47143C /* Components.swift */; };
-		26C0EA4D1D4DDFCB8633DE61 /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = D29B8D24DF4FE44F77A53F34 /* Logging.swift */; };
 		3AC61716C662F82210672F0B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6FC2C905261CC8F43E6A81AC /* Assets.xcassets */; };
 		67B5DCA7FAB4033DC0884D15 /* InferenceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7113040BF0C35B58EA0957B1 /* InferenceSettings.swift */; };
 		6FA533E5FAFB5D6E4B186BA0 /* PipelineCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D15EC022A7514B6908BFE8D /* PipelineCoordinator.swift */; };
-		8C6E1AD5BF73CE0DE22C8585 /* FER_MultiHead_Attention.ipynb in Resources */ = {isa = PBXBuildFile; fileRef = 1DCFD4CADFB7011461911071 /* FER_MultiHead_Attention.ipynb */; };
 		95C97C63EE6A5F81D79B9781 /* FaceModelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CF751CDED178B6FBE23685 /* FaceModelView.swift */; };
 		964D3DEDC187BFBE3089AB05 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B2FDDED8E2CA2879A749BC2 /* ContentView.swift */; };
 		98E4C6FE777CA6FD23A8E779 /* SpatialFaceWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EDE52CF0B4F0D8456825E12 /* SpatialFaceWidget.swift */; };
@@ -23,11 +21,11 @@
 		A0907C0EA8D71756F6013F40 /* CameraPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1291A496A2B15121F30A416E /* CameraPipeline.swift */; };
 		B2DE3BBF4DBEF5C75AD2674B /* FERPredictor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB75390EA09DC87D29CB546 /* FERPredictor.swift */; };
 		B475B820B5DE7FF4B4CCF669 /* TemporalSmoother.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBA80B7EE4CA576571BCB424 /* TemporalSmoother.swift */; };
-		B9E594A42BCA96F6ADD1A747 /* haarcascade.xml in Resources */ = {isa = PBXBuildFile; fileRef = EBFB3E1EA375D27394C1170D /* haarcascade.xml */; };
 		BC82D6D3C33AC2E409E9701C /* FrontVisionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 423B603DFF58339C40AC40A5 /* FrontVisionPipeline.swift */; };
 		BD9535DCDF851DC2806BB98A /* ProbabilityTimelineGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5EF87A5E23C12D3964B1260 /* ProbabilityTimelineGraph.swift */; };
 		C5CFCE5E79A841256955B782 /* ProbabilityGraphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F2E5604C79311866989B6A /* ProbabilityGraphView.swift */; };
-		D0BE9035F7E871BC487A1911 /* copilot-instructions.md in Resources */ = {isa = PBXBuildFile; fileRef = 9024342A36C77CF35AA668E3 /* copilot-instructions.md */; };
+		DAABBCB52EE94C41000126CC /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAABBCB32EE94C41000126CC /* Logging.swift */; };
+		DAABBCB62EE94C41000126CC /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAABBCB22EE94C41000126CC /* Log.swift */; };
 		E3B788780E71E66BB2D6370B /* FacialExpressionDetection_iOS.xcodeproj in Resources */ = {isa = PBXBuildFile; fileRef = DDB8AC170E179DA23CB8DA21 /* FacialExpressionDetection_iOS.xcodeproj */; };
 		E7794B92B7BCA0CF0B752B6C /* GeometryUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6054047931D331643C578D17 /* GeometryUtils.swift */; };
 /* End PBXBuildFile section */
@@ -53,7 +51,8 @@
 		C5EF87A5E23C12D3964B1260 /* ProbabilityTimelineGraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProbabilityTimelineGraph.swift; sourceTree = "<group>"; };
 		CAB75390EA09DC87D29CB546 /* FERPredictor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FERPredictor.swift; sourceTree = "<group>"; };
 		CBA80B7EE4CA576571BCB424 /* TemporalSmoother.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemporalSmoother.swift; sourceTree = "<group>"; };
-		D29B8D24DF4FE44F77A53F34 /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
+		DAABBCB22EE94C41000126CC /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
+		DAABBCB32EE94C41000126CC /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
 		DDB8AC170E179DA23CB8DA21 /* FacialExpressionDetection_iOS.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FacialExpressionDetection_iOS.xcodeproj; sourceTree = "<group>"; };
 		EBFB3E1EA375D27394C1170D /* haarcascade.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = haarcascade.xml; sourceTree = "<group>"; };
 		F5F2E5604C79311866989B6A /* ProbabilityGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProbabilityGraphView.swift; sourceTree = "<group>"; };
@@ -87,8 +86,8 @@
 				CAB75390EA09DC87D29CB546 /* FERPredictor.swift */,
 				6054047931D331643C578D17 /* GeometryUtils.swift */,
 				7113040BF0C35B58EA0957B1 /* InferenceSettings.swift */,
-				D29B8D24DF4FE44F77A53F34 /* Logging.swift */,
 				CBA80B7EE4CA576571BCB424 /* TemporalSmoother.swift */,
+				DAABBCB42EE94C41000126CC /* Logging */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -139,6 +138,15 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		DAABBCB42EE94C41000126CC /* Logging */ = {
+			isa = PBXGroup;
+			children = (
+				DAABBCB22EE94C41000126CC /* Log.swift */,
+				DAABBCB32EE94C41000126CC /* Logging.swift */,
+			);
+			path = Logging;
+			sourceTree = "<group>";
+		};
 		F8AA54B4F76161510BAB976C = {
 			isa = PBXGroup;
 			children = (
@@ -180,7 +188,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2620;
 			};
 			buildConfigurationList = D6C6DB1BFE7CFDF93C490851 /* Build configuration list for PBXProject "FacialExpressionDetection_iOS" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -212,10 +220,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3AC61716C662F82210672F0B /* Assets.xcassets in Resources */,
-				8C6E1AD5BF73CE0DE22C8585 /* FER_MultiHead_Attention.ipynb in Resources */,
 				E3B788780E71E66BB2D6370B /* FacialExpressionDetection_iOS.xcodeproj in Resources */,
-				D0BE9035F7E871BC487A1911 /* copilot-instructions.md in Resources */,
-				B9E594A42BCA96F6ADD1A747 /* haarcascade.xml in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -238,8 +243,9 @@
 				BC82D6D3C33AC2E409E9701C /* FrontVisionPipeline.swift in Sources */,
 				E7794B92B7BCA0CF0B752B6C /* GeometryUtils.swift in Sources */,
 				67B5DCA7FAB4033DC0884D15 /* InferenceSettings.swift in Sources */,
-				26C0EA4D1D4DDFCB8633DE61 /* Logging.swift in Sources */,
 				6FA533E5FAFB5D6E4B186BA0 /* PipelineCoordinator.swift in Sources */,
+				DAABBCB52EE94C41000126CC /* Logging.swift in Sources */,
+				DAABBCB62EE94C41000126CC /* Log.swift in Sources */,
 				C5CFCE5E79A841256955B782 /* ProbabilityGraphView.swift in Sources */,
 				BD9535DCDF851DC2806BB98A /* ProbabilityTimelineGraph.swift in Sources */,
 				98E4C6FE777CA6FD23A8E779 /* SpatialFaceWidget.swift in Sources */,
@@ -254,6 +260,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -285,8 +292,10 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = C9HVAD34XD;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -306,6 +315,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -316,6 +326,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -347,8 +358,10 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = C9HVAD34XD;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -361,6 +374,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -373,7 +387,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = C9HVAD34XD;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Facial Expression";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app requires camera access to detect facial expressions.";
@@ -396,7 +409,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = C9HVAD34XD;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Facial Expression";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app requires camera access to detect facial expressions.";

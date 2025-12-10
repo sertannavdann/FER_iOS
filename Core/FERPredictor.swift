@@ -2,6 +2,7 @@ import SwiftUI
 import Vision
 import CoreML
 import ImageIO
+import simd
 
 // MARK: - FER Predictor using Core ML
 class FERPredictor: ObservableObject {
@@ -12,7 +13,7 @@ class FERPredictor: ObservableObject {
     
     private var smoothers: [Int: TemporalSmoother] = [:]
     private var currentSettings: InferenceSettings
-    private let historyLimit = 75  // Reduce from 120 for 5 seconds at 15fps
+    private let historyLimit = 75  // 5 seconds at 15fps
     
     init(settings: InferenceSettings) {
         self.currentSettings = settings
@@ -63,7 +64,8 @@ class FERPredictor: ObservableObject {
             }
             return
         }
-        // Use the same orientation that was used for face detection to ensure regionOfInterest aligns correctly
+        
+        // Use the same orientation that was used for face detection
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
         ensureSmoothers(count: 1)
         request.regionOfInterest = targetFace.boundingBox
@@ -79,6 +81,7 @@ class FERPredictor: ObservableObject {
         let smoothed = smoothers[0]?.smooth(raw) ?? raw
 
         guard let maxIdx = smoothed.indices.max(by: { smoothed[$0] < smoothed[$1] }) else { return }
+        
         let prediction = FacePrediction(
             boundingBox: targetFace.boundingBox,
             depthMeters: targetFace.depthMeters,
@@ -88,7 +91,10 @@ class FERPredictor: ObservableObject {
             confidence: smoothed[maxIdx],
             yaw: targetFace.yaw,
             pitch: targetFace.pitch,
-            roll: targetFace.roll
+            roll: targetFace.roll,
+            worldPosition: targetFace.worldPosition,
+            transform: targetFace.transform,
+            blendShapes: targetFace.blendShapes
         )
 
         var updatedHistory = probabilityHistory
@@ -104,17 +110,18 @@ class FERPredictor: ObservableObject {
     }
     
     private func extractProbabilities(from request: VNCoreMLRequest) -> [Float]? {
-        var rawProbabilities: [Float]?
         if let results = request.results as? [VNCoreMLFeatureValueObservation],
            let first = results.first,
            let multiArray = first.featureValue.multiArrayValue {
-            rawProbabilities = extractProbabilities(from: multiArray)
+            // Assume MultiArray output is logits (raw scores) -> apply softmax
+            let logits = extractProbabilities(from: multiArray)
+            guard logits.count == 7 else { return nil }
+            return softmax(logits)
         } else if let results = request.results as? [VNClassificationObservation] {
-            rawProbabilities = classificationToProbabilities(results)
+            // Classification observations are already probabilities (confidence)
+            return classificationToProbabilities(results)
         }
-        guard var probs = rawProbabilities, probs.count == 7 else { return nil }
-        probs = softmax(probs)
-        return probs
+        return nil
     }
     
     private func extractProbabilities(from multiArray: MLMultiArray) -> [Float] {
@@ -169,7 +176,43 @@ struct FacePrediction: Identifiable {
     let dominantEmotion: String
     let dominantEmoji: String
     let confidence: Float
-    let yaw: Float?      // Head rotation left/right (degrees)
-    let pitch: Float?    // Head tilt up/down (degrees)
-    let roll: Float?     // Head rotation clockwise/counter (degrees)
+    let yaw: Float?
+    let pitch: Float?
+    let roll: Float?
+    
+    // MARK: - 3D Position Data (from ARKit)
+    /// World position of the face center in meters (x, y, z)
+    let worldPosition: SIMD3<Float>?
+    /// Full 4x4 transform matrix from ARKit
+    let transform: simd_float4x4?
+    /// Face geometry blend shapes (for detailed expression tracking)
+    let blendShapes: [String: Float]?
+    
+    init(
+        boundingBox: CGRect,
+        depthMeters: Float?,
+        probabilities: [Float],
+        dominantEmotion: String,
+        dominantEmoji: String,
+        confidence: Float,
+        yaw: Float?,
+        pitch: Float?,
+        roll: Float?,
+        worldPosition: SIMD3<Float>? = nil,
+        transform: simd_float4x4? = nil,
+        blendShapes: [String: Float]? = nil
+    ) {
+        self.boundingBox = boundingBox
+        self.depthMeters = depthMeters
+        self.probabilities = probabilities
+        self.dominantEmotion = dominantEmotion
+        self.dominantEmoji = dominantEmoji
+        self.confidence = confidence
+        self.yaw = yaw
+        self.pitch = pitch
+        self.roll = roll
+        self.worldPosition = worldPosition
+        self.transform = transform
+        self.blendShapes = blendShapes
+    }
 }

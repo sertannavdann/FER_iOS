@@ -34,8 +34,13 @@ struct ContentView: View {
         GeometryReader { geometry in
             ZStack {
                 // Camera preview
-                CameraPreviewView(previewLayer: coordinator.previewLayer)
-                    .ignoresSafeArea()
+                if let session = coordinator.arSession {
+                    ARSessionView(session: session)
+                        .ignoresSafeArea()
+                } else {
+                    CameraPreviewView(previewLayer: coordinator.previewLayer)
+                        .ignoresSafeArea()
+                }
 
                 // Spatial Face Widget (replaces old overlays)
                 SpatialFaceWidget(

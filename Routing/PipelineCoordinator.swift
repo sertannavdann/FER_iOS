@@ -3,9 +3,11 @@ import AVFoundation
 import SwiftUI
 import Combine
 import ImageIO
+import ARKit
 
 class PipelineCoordinator: ObservableObject {
     @Published var previewLayer: AVCaptureVideoPreviewLayer?
+    @Published var arSession: ARSession?
     @Published var faces: [DetectedFace] = []
     @Published var isBackCamera: Bool = false
     @Published var isARKitActive: Bool = false
@@ -69,8 +71,9 @@ class PipelineCoordinator: ObservableObject {
                 pipeline.start()
                 
                 self.previewLayer = pipeline.previewLayer
+                self.arSession = pipeline.arSession
                 self.pipelineInfo = pipeline.pipelineDescription
-                self.isARKitActive = false
+                self.isARKitActive = (pipeline.arSession != nil)
             }
         }
 

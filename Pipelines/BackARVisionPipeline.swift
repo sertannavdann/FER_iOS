@@ -1,199 +1,289 @@
 import Foundation
 import AVFoundation
 import Vision
+import ARKit
 import UIKit
 
+/// Back camera pipeline using ARKit with LiDAR for accurate 3D face positioning
 class BackARVisionPipeline: NSObject, CameraPipeline {
     let id = "BackARVision"
     var pipelineDescription: String {
-        return "Vision (back camera)"
+        return "ARKit + LiDAR (back camera)"
     }
-    
+
     var onFrameCapture: ((CVPixelBuffer, [DetectedFace], CGImagePropertyOrientation) -> Void)?
     var onDepthCapture: ((CVPixelBuffer) -> Void)?
     var onFacesDetected: (([DetectedFace]) -> Void)?
-    
-    private var fallbackSession: AVCaptureSession?
-    private var fallbackOutput: AVCaptureVideoDataOutput?
+
+    private(set) var arSession: ARSession?
     private let faceLandmarksRequest = VNDetectFaceLandmarksRequest()
-    private let processingQueue = DispatchQueue(label: "camera.processing.back")
-    private let processingSemaphore = DispatchSemaphore(value: 1)
-    
-    private(set) var previewLayer: AVCaptureVideoPreviewLayer?
-    
+    private let processingQueue = DispatchQueue(label: "camera.processing.back", qos: .userInteractive)
+
+    // Use atomic flag instead of semaphore to avoid frame retention
+    private var isProcessing = false
+    private let processingLock = NSLock()
+
+    private(set) var previewLayer: AVCaptureVideoPreviewLayer? = nil
+
+    // MARK: - Device Capability Checks
+
+    static var isLiDARAvailable: Bool {
+        return ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
+    }
+
+    static var isARKitAvailable: Bool {
+        return ARWorldTrackingConfiguration.isSupported
+    }
+
     override init() {
         super.init()
-        setupFallbackSession()
+        setupARSession()
     }
 
-    private func selectBackCamera() -> AVCaptureDevice? {
-        let deviceTypes: [AVCaptureDevice.DeviceType] = [
-            .builtInDualWideCamera,
-            .builtInDualCamera,
-            .builtInWideAngleCamera,
-            .builtInTripleCamera
-        ]
-        let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: deviceTypes, mediaType: .video, position: .back)
-        return discovery.devices.first
-    }
-    
-    private func setupFallbackSession() {
-        guard fallbackSession == nil else { return }
-        let session = AVCaptureSession()
-        session.beginConfiguration()
-        session.sessionPreset = .high
-        
-        guard let camera = selectBackCamera(),
-              camera.supportsSessionPreset(session.sessionPreset),
-              let input = try? AVCaptureDeviceInput(device: camera) else {
-            print("Failed to access back camera")
-            session.commitConfiguration()
+    private func setupARSession() {
+        guard Self.isARKitAvailable else {
+            Log.info("ARKit not available on this device")
             return
         }
-        
-        if session.canAddInput(input) {
-            session.addInput(input)
-        }
-        
-        let output = AVCaptureVideoDataOutput()
-        output.setSampleBufferDelegate(self, queue: processingQueue)
-        output.alwaysDiscardsLateVideoFrames = true
-        output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-        
-        if session.canAddOutput(output) {
-            session.addOutput(output)
-        }
-        
-        // Keep video/depth buffers in sensor-native orientation (landscape)
-        // Vision handles rotation via orientation parameter
-        if let connection = output.connection(with: .video) {
-            connection.isVideoMirrored = false
-        }
-        
-        session.commitConfiguration()
-        
-        let preview = AVCaptureVideoPreviewLayer(session: session)
-        preview.videoGravity = .resizeAspectFill
-        // Set preview layer orientation for correct display
-        if let previewConnection = preview.connection {
-            if #available(iOS 17.0, *) {
-                if previewConnection.isVideoRotationAngleSupported(90) {
-                    previewConnection.videoRotationAngle = 90
-                }
-            } else {
-                if previewConnection.isVideoOrientationSupported {
-                    previewConnection.videoOrientation = .portrait
-                }
-            }
-        }
-        self.previewLayer = preview
-        
-        self.fallbackSession = session
-        self.fallbackOutput = output
+
+        arSession = ARSession()
+        arSession?.delegate = self
     }
-    
+
+    private func createARConfiguration() -> ARWorldTrackingConfiguration {
+        let config = ARWorldTrackingConfiguration()
+
+        // Enable LiDAR depth if available
+        if Self.isLiDARAvailable {
+            config.frameSemantics.insert(.sceneDepth)
+            config.frameSemantics.insert(.smoothedSceneDepth)
+            Log.info("LiDAR depth enabled")
+        }
+
+        // Use highest quality video format
+        if let hiResFormat = ARWorldTrackingConfiguration.supportedVideoFormats
+            .filter({ $0.captureDevicePosition == .back })
+            .max(by: { $0.imageResolution.width < $1.imageResolution.width }) {
+            config.videoFormat = hiResFormat
+            Log.info("Using video format: \(hiResFormat.imageResolution)")
+        }
+
+        // Optimize for face detection use case
+        config.isAutoFocusEnabled = true
+        config.environmentTexturing = .none
+        config.planeDetection = []
+
+        return config
+    }
+
     func start() {
-        startFallbackSession()
+        guard let session = arSession else { return }
+
+        let config = createARConfiguration()
+        Log.info("Starting ARKit session with LiDAR: \(Self.isLiDARAvailable)")
+        session.run(config, options: [.resetTracking, .removeExistingAnchors])
     }
-    
+
     func stop(completion: (() -> Void)? = nil) {
-        processingQueue.async {
-            if let session = self.fallbackSession, session.isRunning {
-                Log.info("Stopping fallback AVCapture session")
-                session.stopRunning()
-            }
-            // Release camera resources to avoid contention when switching pipelines.
-            self.fallbackOutput = nil
-            self.fallbackSession = nil
-            self.previewLayer = nil
-            completion?()
-        }
+        Log.info("Stopping ARKit session")
+        arSession?.pause()
+        completion?()
     }
 
-    private func startFallbackSession() {
-        setupFallbackSession()
-        processingQueue.async {
-            if let session = self.fallbackSession, !session.isRunning {
-                Log.info("Starting fallback AVCapture session")
-                session.startRunning()
-                if let connection = self.previewLayer?.connection {
-                    if #available(iOS 17.0, *) {
-                        if connection.isVideoRotationAngleSupported(90) {
-                            connection.videoRotationAngle = 90
-                        }
-                    } else {
-                        if connection.isVideoOrientationSupported {
-                            connection.videoOrientation = .portrait
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // MARK: - Depth Sampling & 3D Position Calculation
 
+    /// Sample depth at a normalized point and calculate 3D world position
+    private func depthAndPosition(at normalizedPoint: CGPoint, in frame: ARFrame) -> (depth: Float, worldPos: SIMD3<Float>)? {
+        guard let depthData = frame.smoothedSceneDepth ?? frame.sceneDepth else {
+            return nil
+        }
+
+        let camera = frame.camera
+        let depthMap = depthData.depthMap
+        let imageResolution = camera.imageResolution
+
+        // Convert normalized Vision coordinates to pixel coordinates in camera image space
+        // Vision uses normalized coords (0,0) = bottom-left, (1,1) = top-right
+        let imagePoint = CGPoint(
+            x: normalizedPoint.x * imageResolution.width,
+            y: (1.0 - normalizedPoint.y) * imageResolution.height
+        )
+
+        // Sample depth from depth map
+        let depthWidth = CVPixelBufferGetWidth(depthMap)
+        let depthHeight = CVPixelBufferGetHeight(depthMap)
+
+        // Map image coordinates to depth map coordinates
+        let depthX = Int((imagePoint.x / imageResolution.width) * CGFloat(depthWidth))
+        let depthY = Int((imagePoint.y / imageResolution.height) * CGFloat(depthHeight))
+
+        // Clamp to valid range
+        let clampedX = max(0, min(depthWidth - 1, depthX))
+        let clampedY = max(0, min(depthHeight - 1, depthY))
+
+        CVPixelBufferLockBaseAddress(depthMap, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(depthMap, .readOnly) }
+
+        guard let baseAddress = CVPixelBufferGetBaseAddress(depthMap) else {
+            return nil
+        }
+
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(depthMap)
+        let floatBuffer = baseAddress.assumingMemoryBound(to: Float32.self)
+        let index = clampedY * (bytesPerRow / MemoryLayout<Float32>.size) + clampedX
+        let depth = floatBuffer[index]
+
+        // Validate depth
+        guard depth.isFinite && depth > 0.1 && depth < 10.0 else {
+            return nil
+        }
+
+        // Unproject 2D point + depth to 3D world position
+        let intrinsics = camera.intrinsics
+        let fx = intrinsics[0, 0]
+        let fy = intrinsics[1, 1]
+        let cx = intrinsics[2, 0]
+        let cy = intrinsics[2, 1]
+
+        // Calculate 3D point in camera space
+        let x = (Float(imagePoint.x) - cx) * depth / fx
+        let y = (Float(imagePoint.y) - cy) * depth / fy
+        let z = -depth  // Negative because ARKit Z points backward
+
+        // Transform from camera space to world space
+        let cameraSpacePoint = SIMD4<Float>(x, y, z, 1.0)
+        let worldSpacePoint = camera.transform * cameraSpacePoint
+
+        return (
+            depth: depth,
+            worldPos: SIMD3<Float>(worldSpacePoint.x, worldSpacePoint.y, worldSpacePoint.z)
+        )
+    }
 }
-extension BackARVisionPipeline: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        // Drop frame if processing is busy
-        guard processingSemaphore.wait(timeout: .now() + 0.05) == .success else { return }
-        defer { processingSemaphore.signal() }
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        // Sensor output is landscape; rotate right to present portrait to Vision
-        let orientation: CGImagePropertyOrientation = .right
-        
+
+// MARK: - ARSessionDelegate
+
+extension BackARVisionPipeline: ARSessionDelegate {
+
+    func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        // Use lock-based check to avoid frame retention
+        processingLock.lock()
+        if isProcessing {
+            processingLock.unlock()
+            return
+        }
+        isProcessing = true
+        processingLock.unlock()
+
+        // CRITICAL: Process synchronously in autoreleasepool to prevent ARFrame retention
+        // Do NOT pass ARFrame to async blocks
         autoreleasepool {
+            let pixelBuffer = frame.capturedImage
+            let depthMap = (frame.smoothedSceneDepth ?? frame.sceneDepth)?.depthMap
+            
+            // ARKit back camera is in landscape right orientation
+            let orientation: CGImagePropertyOrientation = .right
+
             let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
             try? handler.perform([faceLandmarksRequest])
 
-            let observations = faceLandmarksRequest.results as? [VNFaceObservation] ?? []
-            let faces = observations.map { observation -> DetectedFace in
-                let rect = paddedRect(from: observation.boundingBox)
+            let observations = faceLandmarksRequest.results ?? []
+            
+            // Process faces synchronously while we still have access to frame
+            let faces: [DetectedFace] = observations.compactMap { observation -> DetectedFace? in
+                let bbox = observation.boundingBox
+                let faceCenter = CGPoint(x: bbox.midX, y: bbox.midY)
 
-                // Extract orientation angles (convert radians to degrees)
-                let yaw = observation.yaw.map { Float($0.floatValue) * 180.0 / .pi }
-                let pitch = observation.pitch.map { Float($0.floatValue) * 180.0 / .pi }
-                let roll = observation.roll.map { Float($0.floatValue) * 180.0 / .pi }
+                let yawValue = observation.yaw?.floatValue
+                let pitchValue = observation.pitch?.floatValue
+                let rollValue = observation.roll?.floatValue
+
+                // Sample depth and calculate 3D position while frame is still valid
+                guard let result = depthAndPosition(at: faceCenter, in: frame) else {
+                    return DetectedFace(
+                        boundingBox: bbox,
+                        depthMeters: nil,
+                        yaw: yawValue,
+                        pitch: pitchValue,
+                        roll: rollValue,
+                        worldPosition: nil,
+                        transform: nil,
+                        blendShapes: nil
+                    )
+                }
+
+                var transform = matrix_identity_float4x4
+                transform.columns.3 = SIMD4<Float>(result.worldPos.x, result.worldPos.y, result.worldPos.z, 1.0)
+
+                if let yaw = yawValue, let pitch = pitchValue, let roll = rollValue {
+                    let rotMat = eulerToRotationMatrix(
+                        pitch: CGFloat(pitch),
+                        yaw: CGFloat(yaw),
+                        roll: CGFloat(roll)
+                    )
+                    transform = transform * rotMat
+                }
 
                 return DetectedFace(
-                    boundingBox: rect,
-                    depthMeters: nil,  // Remove active depth estimation
-                    yaw: yaw,
-                    pitch: pitch,
-                    roll: roll
+                    boundingBox: bbox,
+                    depthMeters: result.depth,
+                    yaw: yawValue,
+                    pitch: pitchValue,
+                    roll: rollValue,
+                    worldPosition: result.worldPos,
+                    transform: transform,
+                    blendShapes: nil
                 )
             }
-            onFacesDetected?(faces)
-            // Pass .right orientation to match the orientation used for Vision face detection
-            onFrameCapture?(pixelBuffer, faces, orientation)
+
+            // Release lock before dispatching
+            processingLock.lock()
+            isProcessing = false
+            processingLock.unlock()
+
+            // Dispatch only extracted data to main queue
+            DispatchQueue.main.async { [weak self] in
+                if let depthMap = depthMap {
+                    self?.onDepthCapture?(depthMap)
+                }
+                self?.onFacesDetected?(faces)
+                self?.onFrameCapture?(pixelBuffer, faces, orientation)
+            }
         }
     }
-}
 
-private extension BackARVisionPipeline {
-    func paddedRect(from bbox: CGRect, padding: CGFloat = 0.08) -> CGRect {
-        let expandX = bbox.width * padding / 2
-        let expandY = bbox.height * padding / 2
-        let expanded = CGRect(x: bbox.minX - expandX,
-                              y: bbox.minY - expandY,
-                              width: bbox.width + bbox.width * padding,
-                              height: bbox.height + bbox.height * padding)
-        return clampToUnit(expanded)
+    func session(_ session: ARSession, didFailWithError error: Error) {
+        Log.error("ARSession failed: \(error.localizedDescription)")
     }
 
-    func clampToUnit(_ rect: CGRect) -> CGRect {
-        var x = rect.origin.x
-        var y = rect.origin.y
-        var w = rect.size.width
-        var h = rect.size.height
+    func sessionWasInterrupted(_ session: ARSession) {
+        Log.info("ARSession interrupted")
+    }
 
-        x = max(0, x)
-        y = max(0, y)
-        w = max(0, w)
-        h = max(0, h)
-        if x + w > 1 { w = 1 - x }
-        if y + h > 1 { h = 1 - y }
-        return CGRect(x: x, y: y, width: w, height: h)
+    func sessionInterruptionEnded(_ session: ARSession) {
+        Log.info("ARSession interruption ended, restarting...")
+        start()
     }
 }
 
+// MARK: - Helper Functions
 
+private func eulerToRotationMatrix(pitch: CGFloat, yaw: CGFloat, roll: CGFloat) -> simd_float4x4 {
+    let p = Float(pitch)
+    let y = Float(yaw)
+    let r = Float(roll)
+
+    let cp = cos(p), sp = sin(p)
+    let cy = cos(y), sy = sin(y)
+    let cr = cos(r), sr = sin(r)
+
+    var matrix = matrix_identity_float4x4
+
+    // ZYX Euler rotation
+    matrix.columns.0 = SIMD4<Float>(cy * cr, cy * sr, -sy, 0)
+    matrix.columns.1 = SIMD4<Float>(sp * sy * cr - cp * sr, sp * sy * sr + cp * cr, sp * cy, 0)
+    matrix.columns.2 = SIMD4<Float>(cp * sy * cr + sp * sr, cp * sy * sr - sp * cr, cp * cy, 0)
+    matrix.columns.3 = SIMD4<Float>(0, 0, 0, 1)
+
+    return matrix
+}
