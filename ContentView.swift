@@ -22,7 +22,8 @@ struct ContentView: View {
         get { InferenceSettings(rawValue: settingsData) ?? InferenceSettings() }
         set { settingsData = newValue.rawValue }
     }
-    
+
+    @StateObject private var lifecycle = AppLifecycleManager.shared
     @StateObject private var coordinator = PipelineCoordinator()
     @StateObject private var predictor = FERPredictor(settings: InferenceSettings())
     @State private var showSettings = false
@@ -35,7 +36,7 @@ struct ContentView: View {
             ZStack {
                 // Camera preview
                 if let session = coordinator.arSession {
-                    ARSessionView(session: session)
+                    ARSessionView(session: session, graphManager: coordinator.arGraphManager)
                         .ignoresSafeArea()
                 } else {
                     CameraPreviewView(previewLayer: coordinator.previewLayer)
@@ -46,7 +47,9 @@ struct ContentView: View {
                 SpatialFaceWidget(
                     prediction: predictions.first,
                     history: predictor.probabilityHistory,
-                    geometry: geometry
+                    geometry: geometry,
+                    settings: settings,
+                    isARGraphActive: coordinator.isBackCamera && settings.enableARGraph && coordinator.isARKitActive
                 )
                 
                 // UI Overlay
@@ -122,6 +125,10 @@ struct ContentView: View {
         .onChange(of: settingsData) { _, _ in
             predictor.update(settings: settings)
         }
+        .onChange(of: showSettings) { _, isOpen in
+            // Sync settings sheet state to lifecycle manager
+            lifecycle.isSettingsOpen = isOpen
+        }
         .onDisappear {
             coordinator.stop()
         }
@@ -132,6 +139,10 @@ struct ContentView: View {
             ))
         }
         .onAppear {
+            // Register components with lifecycle manager
+            lifecycle.register(coordinator: coordinator)
+            lifecycle.register(predictor: predictor)
+
             predictor.update(settings: settings)
             coordinator.onFrameCapture = { pixelBuffer, faces, orientation in
                 predictor.predict(pixelBuffer: pixelBuffer, faces: faces, orientation: orientation)
@@ -143,6 +154,24 @@ struct ContentView: View {
             guard now.timeIntervalSince(lastUIUpdate) >= uiUpdateInterval else { return }
             lastUIUpdate = now
             predictions = outputs
+        }
+        .onReceive(predictor.$probabilityHistory.receive(on: DispatchQueue.main)) { history in
+            // Update AR graph surface using latest history and face transform
+            guard coordinator.isBackCamera,
+                  settings.enableARGraph,
+                  let manager = coordinator.arGraphManager else { return }
+
+            let faceTransform = coordinator.faces.first(where: { $0.transform != nil })?.transform
+            manager.update(history: history, faceTransform: faceTransform, settings: settings)
+        }
+        .onReceive(coordinator.$faces.receive(on: DispatchQueue.main)) { faces in
+            // Keep AR surface aligned even when history hasn't changed
+            guard coordinator.isBackCamera,
+                  settings.enableARGraph,
+                  let manager = coordinator.arGraphManager else { return }
+
+            let faceTransform = faces.first(where: { $0.transform != nil })?.transform
+            manager.update(history: predictor.probabilityHistory, faceTransform: faceTransform, settings: settings)
         }
     }
 }

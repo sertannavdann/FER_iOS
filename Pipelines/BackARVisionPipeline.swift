@@ -94,12 +94,7 @@ class BackARVisionPipeline: NSObject, CameraPipeline {
     // MARK: - Depth Sampling & 3D Position Calculation
 
     /// Sample depth at a normalized point and calculate 3D world position
-    private func depthAndPosition(at normalizedPoint: CGPoint, in frame: ARFrame) -> (depth: Float, worldPos: SIMD3<Float>)? {
-        guard let depthData = frame.smoothedSceneDepth ?? frame.sceneDepth else {
-            return nil
-        }
-
-        let camera = frame.camera
+    private func depthAndPosition(at normalizedPoint: CGPoint, camera: ARCamera, depthData: ARDepthData) -> (depth: Float, worldPos: SIMD3<Float>)? {
         let depthMap = depthData.depthMap
         let imageResolution = camera.imageResolution
 
@@ -176,80 +171,80 @@ extension BackARVisionPipeline: ARSessionDelegate {
         isProcessing = true
         processingLock.unlock()
 
-        // CRITICAL: Process synchronously in autoreleasepool to prevent ARFrame retention
-        // Do NOT pass ARFrame to async blocks
-        autoreleasepool {
-            let pixelBuffer = frame.capturedImage
-            let depthMap = (frame.smoothedSceneDepth ?? frame.sceneDepth)?.depthMap
-            
-            // ARKit back camera is in landscape right orientation
-            let orientation: CGImagePropertyOrientation = .right
+        // CRITICAL: Extract all data synchronously
+        let pixelBuffer = frame.capturedImage
+        let depthMap = (frame.smoothedSceneDepth ?? frame.sceneDepth)?.depthMap
+        let camera = frame.camera
+        let depthData = frame.smoothedSceneDepth ?? frame.sceneDepth
+        
+        // ARKit back camera is in landscape right orientation
+        let orientation: CGImagePropertyOrientation = .right
 
-            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
-            try? handler.perform([faceLandmarksRequest])
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
+        try? handler.perform([faceLandmarksRequest])
 
-            let observations = faceLandmarksRequest.results ?? []
-            
-            // Process faces synchronously while we still have access to frame
-            let faces: [DetectedFace] = observations.compactMap { observation -> DetectedFace? in
-                let bbox = observation.boundingBox
-                let faceCenter = CGPoint(x: bbox.midX, y: bbox.midY)
+        let observations = faceLandmarksRequest.results ?? []
+        
+        // Process faces synchronously
+        let faces: [DetectedFace] = observations.compactMap { observation -> DetectedFace? in
+            let bbox = observation.boundingBox
+            let faceCenter = CGPoint(x: bbox.midX, y: bbox.midY)
 
-                let yawValue = observation.yaw?.floatValue
-                let pitchValue = observation.pitch?.floatValue
-                let rollValue = observation.roll?.floatValue
+            let yawValue = observation.yaw?.floatValue
+            let pitchValue = observation.pitch?.floatValue
+            let rollValue = observation.roll?.floatValue
 
-                // Sample depth and calculate 3D position while frame is still valid
-                guard let result = depthAndPosition(at: faceCenter, in: frame) else {
-                    return DetectedFace(
-                        boundingBox: bbox,
-                        depthMeters: nil,
-                        yaw: yawValue,
-                        pitch: pitchValue,
-                        roll: rollValue,
-                        worldPosition: nil,
-                        transform: nil,
-                        blendShapes: nil
-                    )
-                }
-
-                var transform = matrix_identity_float4x4
-                transform.columns.3 = SIMD4<Float>(result.worldPos.x, result.worldPos.y, result.worldPos.z, 1.0)
-
-                if let yaw = yawValue, let pitch = pitchValue, let roll = rollValue {
-                    let rotMat = eulerToRotationMatrix(
-                        pitch: CGFloat(pitch),
-                        yaw: CGFloat(yaw),
-                        roll: CGFloat(roll)
-                    )
-                    transform = transform * rotMat
-                }
-
+            // Sample depth and calculate 3D position
+            guard let depthData = depthData,
+                  let result = depthAndPosition(at: faceCenter, camera: camera, depthData: depthData) else {
                 return DetectedFace(
                     boundingBox: bbox,
-                    depthMeters: result.depth,
+                    depthMeters: nil,
                     yaw: yawValue,
                     pitch: pitchValue,
                     roll: rollValue,
-                    worldPosition: result.worldPos,
-                    transform: transform,
+                    worldPosition: nil,
+                    transform: nil,
                     blendShapes: nil
                 )
             }
 
-            // Release lock before dispatching
-            processingLock.lock()
-            isProcessing = false
-            processingLock.unlock()
+            var transform = matrix_identity_float4x4
+            transform.columns.3 = SIMD4<Float>(result.worldPos.x, result.worldPos.y, result.worldPos.z, 1.0)
 
-            // Dispatch only extracted data to main queue
-            DispatchQueue.main.async { [weak self] in
-                if let depthMap = depthMap {
-                    self?.onDepthCapture?(depthMap)
-                }
-                self?.onFacesDetected?(faces)
-                self?.onFrameCapture?(pixelBuffer, faces, orientation)
+            if let yaw = yawValue, let pitch = pitchValue, let roll = rollValue {
+                let rotMat = eulerToRotationMatrix(
+                    pitch: CGFloat(pitch),
+                    yaw: CGFloat(yaw),
+                    roll: CGFloat(roll)
+                )
+                transform = transform * rotMat
             }
+
+            return DetectedFace(
+                boundingBox: bbox,
+                depthMeters: result.depth,
+                yaw: yawValue,
+                pitch: pitchValue,
+                roll: rollValue,
+                worldPosition: result.worldPos,
+                transform: transform,
+                blendShapes: nil
+            )
+        }
+
+        // Release lock before dispatching
+        processingLock.lock()
+        isProcessing = false
+        processingLock.unlock()
+
+        // Dispatch only extracted data to main queue
+        DispatchQueue.main.async { [weak self] in
+            if let depthMap = depthMap {
+                self?.onDepthCapture?(depthMap)
+            }
+            self?.onFacesDetected?(faces)
+            self?.onFrameCapture?(pixelBuffer, faces, orientation)
         }
     }
 

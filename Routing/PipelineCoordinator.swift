@@ -1,22 +1,26 @@
 import Foundation
+import Foundation
 import AVFoundation
 import SwiftUI
 import Combine
 import ImageIO
 import ARKit
 
-class PipelineCoordinator: ObservableObject {
+@MainActor
+class PipelineCoordinator: ObservableObject, PipelineCoordinatorProtocol {
     @Published var previewLayer: AVCaptureVideoPreviewLayer?
     @Published var arSession: ARSession?
     @Published var faces: [DetectedFace] = []
     @Published var isBackCamera: Bool = false
     @Published var isARKitActive: Bool = false
     @Published var pipelineInfo: String = "Initializing..."
-    
+    @Published var arGraphManager: ARGraphSurfaceManager?
+
     private var frontPipeline: FrontVisionPipeline?
     private var backPipeline: BackARVisionPipeline?
     private var activePipeline: CameraPipeline?
-    
+    private var isPaused: Bool = false
+
     // Frame callback for inference - includes orientation for Vision alignment
     var onFrameCapture: ((CVPixelBuffer, [DetectedFace], CGImagePropertyOrientation) -> Void)?
     var onDepthCapture: ((CVPixelBuffer) -> Void)?
@@ -34,6 +38,8 @@ class PipelineCoordinator: ObservableObject {
         Log.info("Switching to front pipeline")
         activatePipeline(frontPipeline!)
         isBackCamera = false
+        arGraphManager?.remove()
+        arGraphManager = nil
     }
     
     private func setupBackPipeline() {
@@ -74,6 +80,14 @@ class PipelineCoordinator: ObservableObject {
                 self.arSession = pipeline.arSession
                 self.pipelineInfo = pipeline.pipelineDescription
                 self.isARKitActive = (pipeline.arSession != nil)
+
+                // Create AR graph manager when AR session is available (back camera)
+                if let session = pipeline.arSession {
+                    self.arGraphManager = ARGraphSurfaceManager(arSession: session)
+                } else {
+                    self.arGraphManager?.remove()
+                    self.arGraphManager = nil
+                }
             }
         }
 
@@ -108,5 +122,22 @@ class PipelineCoordinator: ObservableObject {
     
     func stop() {
         activePipeline?.stop(completion: nil)
+        arGraphManager?.cleanup()
+    }
+
+    // MARK: - PipelineCoordinatorProtocol
+
+    func pause() {
+        guard !isPaused else { return }
+        isPaused = true
+        Log.info("[PipelineCoordinator] Pausing active pipeline")
+        activePipeline?.stop(completion: nil)
+    }
+
+    func resume() {
+        guard isPaused else { return }
+        isPaused = false
+        Log.info("[PipelineCoordinator] Resuming active pipeline")
+        activePipeline?.start()
     }
 }

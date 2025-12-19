@@ -6,29 +6,53 @@ struct SpatialFaceWidget: View {
     let prediction: FacePrediction?
     let history: [[Float]]
     let geometry: GeometryProxy
+    let settings: InferenceSettings
+    let isARGraphActive: Bool
 
     @State private var smoothedPosition: CGPoint = .zero
     private let positionAlpha: CGFloat = 0.2
 
     var body: some View {
-        if let prediction = prediction {
-            let widgetFrame = calculateWidgetFrame(for: prediction, in: geometry.size)
+        Group {
+            if isARGraphActive {
+                EmptyView()
+            } else if let prediction = prediction {
+                let widgetFrame = calculateWidgetFrame(for: prediction, in: geometry.size)
 
-            VStack(spacing: 12) {
-                // Probability Timeline Graph (bottom section)
-                ProbabilityTimelineGraph(history: history)
-                    .frame(width: widgetFrame.width)
-                    .padding(8)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-            }
-            .position(smoothedPosition)
-            .transition(.opacity.combined(with: .scale(scale: 0.8)))
-            .onAppear {
-                smoothedPosition = CGPoint(x: widgetFrame.midX, y: widgetFrame.midY)
-            }
-            .onChange(of: prediction.boundingBox) { _, _ in
-                updateSmoothedPosition(to: CGPoint(x: widgetFrame.midX, y: widgetFrame.midY))
+                ZStack {
+                    if settings.showFaceRect {
+                        let faceRect = convertedRect(prediction.boundingBox, in: geometry.size)
+                        let roiRect = convertedRect(prediction.inferenceROI, in: geometry.size)
+
+                        Rectangle()
+                            .stroke(Color.green, lineWidth: 2)
+                            .frame(width: faceRect.width, height: faceRect.height)
+                            .position(x: faceRect.midX, y: faceRect.midY)
+
+                        Rectangle()
+                            .stroke(Color.yellow.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [5]))
+                            .frame(width: roiRect.width, height: roiRect.height)
+                            .position(x: roiRect.midX, y: roiRect.midY)
+                    }
+
+                    VStack(spacing: 12) {
+                        ProbabilityTimelineGraph(history: history)
+                            .frame(width: widgetFrame.width)
+                            .padding(8)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    }
+                    .position(smoothedPosition)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                }
+                .onAppear {
+                    smoothedPosition = CGPoint(x: widgetFrame.midX, y: widgetFrame.midY)
+                }
+                .onChange(of: prediction.boundingBox) { _, _ in
+                    updateSmoothedPosition(to: CGPoint(x: widgetFrame.midX, y: widgetFrame.midY))
+                }
+            } else {
+                EmptyView()
             }
         }
     }
@@ -92,6 +116,7 @@ struct SpatialFaceWidget: View {
             SpatialFaceWidget(
                 prediction: FacePrediction(
                     boundingBox: CGRect(x: 0.3, y: 0.4, width: 0.4, height: 0.3),
+                    inferenceROI: CGRect(x: 0.2, y: 0.3, width: 0.6, height: 0.5),
                     depthMeters: nil,
                     probabilities: [0.1, 0.2, 0.15, 0.7, 0.05, 0.1, 0.2],
                     dominantEmotion: "happy",
@@ -102,7 +127,9 @@ struct SpatialFaceWidget: View {
                     roll: 5
                 ),
                 history: Array(repeating: [0.2, 0.4, 0.8, 0.1, 0.6, 0.3, 0.5], count: 50),
-                geometry: geometry
+                geometry: geometry,
+                settings: InferenceSettings(),
+                isARGraphActive: false
             )
         }
     }

@@ -6,36 +6,51 @@ import simd
 import CoreImage
 
 // MARK: - FER Predictor using Core ML
-class FERPredictor: ObservableObject {
+class FERPredictor: ObservableObject, FERPredictorProtocol {
     private var model: VNCoreMLModel?
     private var request: VNCoreMLRequest?
     @Published var faceOutputs: [FacePrediction] = []
     @Published var probabilityHistory: [[Float]] = []
-    
+
     private var smoothers: [Int: TemporalSmoother] = [:]
     private var currentSettings: InferenceSettings
+    private var currentModelType: MLModelType
     private let historyLimit = 75  // 5 seconds at 15fps
-    
+    private var isPaused: Bool = false
+
+    // Metal converter for high-performance grayscale conversion
+    private let metalConverter = MetalGrayscaleConverter()
+
     init(settings: InferenceSettings) {
         self.currentSettings = settings
-        loadModel()
+        self.currentModelType = settings.selectedModel
+        loadModel(settings.selectedModel)
         update(settings: settings)
     }
 
     func update(settings: InferenceSettings) {
+        let modelChanged = currentSettings.selectedModel != settings.selectedModel
         currentSettings = settings
+
+        if modelChanged {
+            currentModelType = settings.selectedModel
+            loadModel(settings.selectedModel)
+            reset()
+        }
+
         // Reset smoothers with new settings for each active face
         smoothers = smoothers.mapValues { _ in TemporalSmoother(settings: settings) }
     }
     
-    private func loadModel() {
+    private func loadModel(_ modelType: MLModelType) {
+        let modelName = modelType.rawValue
         // Try to load the model from the app bundle
-        guard let modelURL = Bundle.main.url(forResource: "FER_Model", withExtension: "mlmodelc") ??
-                             Bundle.main.url(forResource: "FER_Model", withExtension: "mlpackage") else {
-            print("Model not found in bundle")
+        guard let modelURL = Bundle.main.url(forResource: modelName, withExtension: "mlmodelc") ??
+                             Bundle.main.url(forResource: modelName, withExtension: "mlpackage") else {
+            print("Model '\(modelName)' not found in bundle")
             return
         }
-        
+
         do {
             let compiledURL: URL
             if modelURL.pathExtension == "mlpackage" || modelURL.pathExtension == "mlmodel" {
@@ -43,21 +58,28 @@ class FERPredictor: ObservableObject {
             } else {
                 compiledURL = modelURL
             }
-            
-            let mlModel = try MLModel(contentsOf: compiledURL)
+
+            // Configure for ANE usage
+            let config = MLModelConfiguration()
+            config.computeUnits = .all // Explicitly allow ANE, GPU, and CPU
+
+            let mlModel = try MLModel(contentsOf: compiledURL, configuration: config)
             model = try VNCoreMLModel(for: mlModel)
-            
+
             let coreRequest = VNCoreMLRequest(model: model!)
             coreRequest.imageCropAndScaleOption = .scaleFill
             request = coreRequest
-            
-            print("Model loaded successfully")
+
+            print("Model '\(modelType.displayName)' loaded successfully")
         } catch {
-            print("Error loading model: \(error)")
+            print("Error loading model '\(modelName)': \(error)")
         }
     }
     
     func predict(pixelBuffer: CVPixelBuffer, faces: [DetectedFace], orientation: CGImagePropertyOrientation = .up) {
+        // Skip prediction if paused
+        guard !isPaused else { return }
+
         guard let request = request else { return }
         guard let targetFace = faces.max(by: { $0.boundingBox.area < $1.boundingBox.area }) else {
             DispatchQueue.main.async {
@@ -70,19 +92,36 @@ class FERPredictor: ObservableObject {
         
         // Clamp bounding box to [0, 1] to avoid Vision errors
         let bbox = targetFace.boundingBox
+        
+        // Apply face expansion
+        let expansionRatio = CGFloat(currentSettings.faceExpansionRatio)
+        let expansionX = bbox.width * expansionRatio
+        let expansionY = bbox.height * expansionRatio
+        
+        // insetBy with negative values expands the rect
+        let expandedRect = bbox.insetBy(dx: -expansionX, dy: -expansionY)
+        
         let clampedRect = CGRect(
-            x: max(0, bbox.minX),
-            y: max(0, bbox.minY),
-            width: min(1.0 - max(0, bbox.minX), bbox.width),
-            height: min(1.0 - max(0, bbox.minY), bbox.height)
+            x: max(0, expandedRect.minX),
+            y: max(0, expandedRect.minY),
+            width: min(1.0 - max(0, expandedRect.minX), expandedRect.width),
+            height: min(1.0 - max(0, expandedRect.minY), expandedRect.height)
         )
         request.regionOfInterest = clampedRect
+        let appliedROI = clampedRect
 
-        // Explicitly convert to grayscale to match C++ implementation (RGB -> Gray -> RGB)
-        // This ensures the model receives the expected feature distribution
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let grayscale = ciImage.applyingFilter("CIPhotoEffectMono")
-        let handler = VNImageRequestHandler(ciImage: grayscale, orientation: orientation, options: [:])
+        // Use Metal for high-performance grayscale conversion
+        // This matches the C++ implementation's preprocessing step
+        var handler: VNImageRequestHandler
+        if let converter = metalConverter,
+           let grayBuffer = converter.convert(pixelBuffer: pixelBuffer) {
+            handler = VNImageRequestHandler(cvPixelBuffer: grayBuffer, orientation: orientation, options: [:])
+        } else {
+            // Fallback to CoreImage if Metal fails
+            let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+            let grayscale = ciImage.applyingFilter("CIPhotoEffectMono")
+            handler = VNImageRequestHandler(ciImage: grayscale, orientation: orientation, options: [:])
+        }
 
         do {
             try handler.perform([request])
@@ -98,6 +137,7 @@ class FERPredictor: ObservableObject {
         
         let prediction = FacePrediction(
             boundingBox: targetFace.boundingBox,
+            inferenceROI: appliedROI,
             depthMeters: targetFace.depthMeters,
             probabilities: smoothed,
             dominantEmotion: emotionClasses[maxIdx],
@@ -176,6 +216,18 @@ class FERPredictor: ObservableObject {
             smoothers = new
         }
     }
+
+    // MARK: - FERPredictorProtocol
+
+    func pause() {
+        isPaused = true
+        Log.info("[FERPredictor] Paused")
+    }
+
+    func resume() {
+        isPaused = false
+        Log.info("[FERPredictor] Resumed")
+    }
 }
 
 private extension CGRect {
@@ -185,6 +237,7 @@ private extension CGRect {
 struct FacePrediction: Identifiable {
     let id = UUID()
     let boundingBox: CGRect
+    let inferenceROI: CGRect
     let depthMeters: Float?
     let probabilities: [Float]
     let dominantEmotion: String
@@ -204,6 +257,7 @@ struct FacePrediction: Identifiable {
     
     init(
         boundingBox: CGRect,
+        inferenceROI: CGRect,
         depthMeters: Float?,
         probabilities: [Float],
         dominantEmotion: String,
@@ -217,6 +271,7 @@ struct FacePrediction: Identifiable {
         blendShapes: [String: Float]? = nil
     ) {
         self.boundingBox = boundingBox
+        self.inferenceROI = inferenceROI
         self.depthMeters = depthMeters
         self.probabilities = probabilities
         self.dominantEmotion = dominantEmotion

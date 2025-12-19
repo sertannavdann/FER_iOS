@@ -200,16 +200,15 @@ extension FrontVisionPipeline: ARSessionDelegate {
         isProcessing = true
         processingLock.unlock()
 
-        // CRITICAL: Extract all needed data from ARFrame IMMEDIATELY on the delegate thread
-        // Do NOT pass ARFrame or its properties to async blocks - this causes frame retention
-        autoreleasepool {
-            // Copy pixel buffer reference (CVPixelBuffer is reference counted separately)
-            let pixelBuffer = frame.capturedImage
-            
-            // Extract face data synchronously before frame is released
-            let faceAnchors = frame.anchors.compactMap { $0 as? ARFaceAnchor }
-            
-            let faces: [DetectedFace] = faceAnchors.map { anchor in
+        // CRITICAL: Extract all needed data from ARFrame IMMEDIATELY and synchronously
+        // Copy pixel buffer (CVPixelBuffer is reference-counted separately)
+        let pixelBuffer = frame.capturedImage
+        
+        // Extract face anchors immediately
+        let faceAnchors = frame.anchors.compactMap { $0 as? ARFaceAnchor }
+        
+        // Process face data synchronously
+        let faces: [DetectedFace] = faceAnchors.map { anchor in
                 let transform = anchor.transform
                 
                 let position = SIMD3<Float>(
@@ -245,16 +244,15 @@ extension FrontVisionPipeline: ARSessionDelegate {
                 )
             }
             
-            // Release processing lock before dispatching
-            processingLock.lock()
-            isProcessing = false
-            processingLock.unlock()
-            
-            // Dispatch with already-extracted data only
-            DispatchQueue.main.async { [weak self] in
-                self?.onFacesDetected?(faces)
-                self?.onFrameCapture?(pixelBuffer, faces, .up)
-            }
+        // Release processing lock
+        processingLock.lock()
+        isProcessing = false
+        processingLock.unlock()
+        
+        // Dispatch with extracted data (no frame references)
+        DispatchQueue.main.async { [weak self] in
+            self?.onFacesDetected?(faces)
+            self?.onFrameCapture?(pixelBuffer, faces, .up)
         }
     }
 
