@@ -48,6 +48,7 @@ struct InferenceSettings: Codable, RawRepresentable, Equatable {
     let graphSurfaceMinSize: Float
     let graphSurfaceMaxSize: Float
     let enableScreenRecording: Bool  // Allow screen recording in AR mode
+    let enableLiDAR: Bool  // Enable LiDAR depth estimation (back camera only)
 
     init(
         ringBufferSize: Int = 60,
@@ -57,7 +58,7 @@ struct InferenceSettings: Codable, RawRepresentable, Equatable {
         faceExpansionRatio: Double = 0.2,
         showFaceRect: Bool = true,
         selectedModel: MLModelType = .ferModelFP32,
-        enableARGraph: Bool = true,
+        enableARGraph: Bool = false,  // Disabled by default to reduce overhead
         graphSurfaceOffsetMeters: Float = 0.5,
         graphSurfaceSide: GraphSide = .right,
         graphSurfaceBaseWidth: Float = 0.3,
@@ -65,7 +66,8 @@ struct InferenceSettings: Codable, RawRepresentable, Equatable {
         graphSurfaceScalingFactor: Float = 1.0,
         graphSurfaceMinSize: Float = 0.2,
         graphSurfaceMaxSize: Float = 0.8,
-        enableScreenRecording: Bool = false
+        enableScreenRecording: Bool = false,
+        enableLiDAR: Bool = true
     ) {
         self.ringBufferSize = ringBufferSize
         self.emaAlpha = emaAlpha
@@ -83,6 +85,7 @@ struct InferenceSettings: Codable, RawRepresentable, Equatable {
         self.graphSurfaceMinSize = graphSurfaceMinSize
         self.graphSurfaceMaxSize = graphSurfaceMaxSize
         self.enableScreenRecording = enableScreenRecording
+        self.enableLiDAR = enableLiDAR
     }
 
     init?(rawValue: Data) {
@@ -110,7 +113,8 @@ struct InferenceSettings: Codable, RawRepresentable, Equatable {
         lhs.graphSurfaceScalingFactor == rhs.graphSurfaceScalingFactor &&
         lhs.graphSurfaceMinSize == rhs.graphSurfaceMinSize &&
         lhs.graphSurfaceMaxSize == rhs.graphSurfaceMaxSize &&
-        lhs.enableScreenRecording == rhs.enableScreenRecording
+        lhs.enableScreenRecording == rhs.enableScreenRecording &&
+        lhs.enableLiDAR == rhs.enableLiDAR
     }
 
     // Convenience copy-with helper to avoid reconstructing manually
@@ -130,7 +134,8 @@ struct InferenceSettings: Codable, RawRepresentable, Equatable {
         graphSurfaceScalingFactor: Float? = nil,
         graphSurfaceMinSize: Float? = nil,
         graphSurfaceMaxSize: Float? = nil,
-        enableScreenRecording: Bool? = nil
+        enableScreenRecording: Bool? = nil,
+        enableLiDAR: Bool? = nil
     ) -> InferenceSettings {
         InferenceSettings(
             ringBufferSize: ringBufferSize ?? self.ringBufferSize,
@@ -148,7 +153,8 @@ struct InferenceSettings: Codable, RawRepresentable, Equatable {
             graphSurfaceScalingFactor: graphSurfaceScalingFactor ?? self.graphSurfaceScalingFactor,
             graphSurfaceMinSize: graphSurfaceMinSize ?? self.graphSurfaceMinSize,
             graphSurfaceMaxSize: graphSurfaceMaxSize ?? self.graphSurfaceMaxSize,
-            enableScreenRecording: enableScreenRecording ?? self.enableScreenRecording
+            enableScreenRecording: enableScreenRecording ?? self.enableScreenRecording,
+            enableLiDAR: enableLiDAR ?? self.enableLiDAR
         )
     }
 }

@@ -223,9 +223,19 @@ extension FrontVisionPipeline: ARSessionDelegate {
                 let pitch = euler.x * 180.0 / Float.pi
                 let yaw = euler.y * 180.0 / Float.pi
                 let roll = euler.z * 180.0 / Float.pi
-                
-                // Use centered bounding box for ML model
-                let boundingBox = CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
+
+                // Calculate bounding box from face depth (closer faces = larger bbox)
+                // Estimate bbox size dynamically instead of using hardcoded centered rect
+                let depthScale = CGFloat(max(0.3, min(0.9, 1.0 / max(0.5, abs(position.z)))))
+                let bboxSize = depthScale * 0.5  // Scale from 15% to 45% of frame
+
+                // Center the square bbox
+                let boundingBox = CGRect(
+                    x: 0.5 - bboxSize / 2,
+                    y: 0.5 - bboxSize / 2,
+                    width: bboxSize,
+                    height: bboxSize
+                )
                 
                 var shapes: [String: Float] = [:]
                 for (key, value) in anchor.blendShapes {

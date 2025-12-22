@@ -25,6 +25,8 @@ class BackARVisionPipeline: NSObject, CameraPipeline {
 
     private(set) var previewLayer: AVCaptureVideoPreviewLayer? = nil
 
+    private var settings: InferenceSettings
+
     // MARK: - Device Capability Checks
 
     static var isLiDARAvailable: Bool {
@@ -35,7 +37,8 @@ class BackARVisionPipeline: NSObject, CameraPipeline {
         return ARWorldTrackingConfiguration.isSupported
     }
 
-    override init() {
+    init(settings: InferenceSettings) {
+        self.settings = settings
         super.init()
         setupARSession()
     }
@@ -54,11 +57,13 @@ class BackARVisionPipeline: NSObject, CameraPipeline {
     private func createARConfiguration() -> ARWorldTrackingConfiguration {
         let config = ARWorldTrackingConfiguration()
 
-        // Enable LiDAR depth if available
-        if Self.isLiDARAvailable {
+        // Enable LiDAR depth only if available AND enabled in settings
+        if Self.isLiDARAvailable && settings.enableLiDAR {
             config.frameSemantics.insert(.sceneDepth)
             config.frameSemantics.insert(.smoothedSceneDepth)
             Log.info("LiDAR depth enabled")
+        } else if Self.isLiDARAvailable {
+            Log.info("LiDAR available but disabled in settings")
         }
 
         // Use highest quality video format
@@ -89,6 +94,18 @@ class BackARVisionPipeline: NSObject, CameraPipeline {
         Log.info("Stopping ARKit session")
         arSession?.pause()
         completion?()
+    }
+
+    func updateSettings(_ settings: InferenceSettings) {
+        let lidarChanged = settings.enableLiDAR != self.settings.enableLiDAR
+        self.settings = settings
+
+        // Restart session if LiDAR setting changed
+        if lidarChanged, let session = arSession {
+            Log.info("LiDAR setting changed, restarting ARKit session")
+            let config = createARConfiguration()
+            session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        }
     }
 
     // MARK: - Depth Sampling & 3D Position Calculation
@@ -138,8 +155,16 @@ class BackARVisionPipeline: NSObject, CameraPipeline {
         let intrinsics = camera.intrinsics
         let fx = intrinsics[0, 0]
         let fy = intrinsics[1, 1]
-        let cx = intrinsics[2, 0]
-        let cy = intrinsics[2, 1]
+
+        // CRITICAL: ARKit's intrinsics matrix doesn't store cx/cy in the matrix
+        // The matrix format is [fx 0 0; 0 fy 0; 0 0 1]
+        // Principal point must be calculated from image center
+        let cx = Float(camera.imageResolution.width / 2.0)
+        let cy = Float(camera.imageResolution.height / 2.0)
+
+        // Debug logging for validation
+        Log.debug("[Depth] Intrinsics: fx=\(fx) fy=\(fy) cx=\(cx) cy=\(cy)")
+        Log.debug("[Depth] Sampled depth=\(String(format: "%.2f", depth))m at imagePoint=(\(Int(imagePoint.x)), \(Int(imagePoint.y)))")
 
         // Calculate 3D point in camera space
         let x = (Float(imagePoint.x) - cx) * depth / fx
@@ -194,17 +219,18 @@ extension BackARVisionPipeline: ARSessionDelegate {
             let pitchValue = observation.pitch?.floatValue
             let rollValue = observation.roll?.floatValue
 
-            // Sample depth and calculate 3D position
-            guard let depthData = depthData,
+            // Sample depth only if LiDAR enabled
+            guard self.settings.enableLiDAR,
+                  let depthData = depthData,
                   let result = depthAndPosition(at: faceCenter, camera: camera, depthData: depthData) else {
                 return DetectedFace(
                     boundingBox: bbox,
-                    depthMeters: nil,
+                    depthMeters: nil,  // nil when LiDAR off
                     yaw: yawValue,
                     pitch: pitchValue,
                     roll: rollValue,
-                    worldPosition: nil,
-                    transform: nil,
+                    worldPosition: nil,  // nil when LiDAR off
+                    transform: nil,  // nil when LiDAR off
                     blendShapes: nil
                 )
             }

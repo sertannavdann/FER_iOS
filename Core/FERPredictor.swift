@@ -92,23 +92,57 @@ class FERPredictor: ObservableObject, FERPredictorProtocol {
         
         // Clamp bounding box to [0, 1] to avoid Vision errors
         let bbox = targetFace.boundingBox
-        
-        // Apply face expansion
-        let expansionRatio = CGFloat(currentSettings.faceExpansionRatio)
-        let expansionX = bbox.width * expansionRatio
-        let expansionY = bbox.height * expansionRatio
-        
-        // insetBy with negative values expands the rect
-        let expandedRect = bbox.insetBy(dx: -expansionX, dy: -expansionY)
-        
-        let clampedRect = CGRect(
-            x: max(0, expandedRect.minX),
-            y: max(0, expandedRect.minY),
-            width: min(1.0 - max(0, expandedRect.minX), expandedRect.width),
-            height: min(1.0 - max(0, expandedRect.minY), expandedRect.height)
+
+        // CRITICAL FIX: Make bbox square FIRST, THEN expand to ensure equal padding
+        // Previous order (expand→square) caused unequal expansion on width vs height
+
+        // Step 1: Convert bbox to square (using larger dimension)
+        let squareSize = max(bbox.width, bbox.height)
+        let squareCenter = CGPoint(x: bbox.midX, y: bbox.midY)
+
+        let squareBbox = CGRect(
+            x: squareCenter.x - squareSize / 2,
+            y: squareCenter.y - squareSize / 2,
+            width: squareSize,
+            height: squareSize
         )
-        request.regionOfInterest = clampedRect
-        let appliedROI = clampedRect
+
+        // Step 2: NOW expand the square by configured ratio (equal on all sides)
+        let expansionRatio = CGFloat(currentSettings.faceExpansionRatio)
+        let expansion = squareSize * expansionRatio
+        let expandedSquare = squareBbox.insetBy(dx: -expansion, dy: -expansion)
+
+        // Step 3: Clamp to [0, 1] bounds WHILE PRESERVING SQUARE ASPECT RATIO
+        // If clamping breaks the square, we need to adjust both dimensions equally
+        var finalSquare = expandedSquare
+
+        // Clamp to bounds
+        if finalSquare.minX < 0 {
+            finalSquare.origin.x = 0
+        }
+        if finalSquare.minY < 0 {
+            finalSquare.origin.y = 0
+        }
+        if finalSquare.maxX > 1.0 {
+            finalSquare.origin.x = max(0, 1.0 - finalSquare.width)
+        }
+        if finalSquare.maxY > 1.0 {
+            finalSquare.origin.y = max(0, 1.0 - finalSquare.height)
+        }
+
+        // If square is too large to fit in [0,1], shrink it while keeping it square
+        if finalSquare.width > 1.0 || finalSquare.height > 1.0 {
+            let maxSize = min(1.0, finalSquare.width, finalSquare.height)
+            finalSquare.size = CGSize(width: maxSize, height: maxSize)
+            // Re-center
+            finalSquare.origin = CGPoint(
+                x: max(0, min(1.0 - maxSize, squareCenter.x - maxSize / 2)),
+                y: max(0, min(1.0 - maxSize, squareCenter.y - maxSize / 2))
+            )
+        }
+
+        request.regionOfInterest = finalSquare
+        let appliedROI = finalSquare
 
         // Use Metal for high-performance grayscale conversion
         // This matches the C++ implementation's preprocessing step

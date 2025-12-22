@@ -124,6 +124,7 @@ struct ContentView: View {
         }
         .onChange(of: settingsData) { _, _ in
             predictor.update(settings: settings)
+            coordinator.updateSettings(settings)
         }
         .onChange(of: showSettings) { _, isOpen in
             // Sync settings sheet state to lifecycle manager

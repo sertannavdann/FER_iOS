@@ -198,7 +198,27 @@ struct SettingsSheet: View {
                     }
                     Text(String(format: "Max: %.2fm", settings.graphSurfaceMaxSize))
                 }
-                
+
+                Section("LiDAR Depth (Back Camera)") {
+                    Toggle("Enable LiDAR", isOn: Binding(
+                        get: { settings.enableLiDAR },
+                        set: { settings = settings.updating(enableLiDAR: $0) }
+                    ))
+
+                    Text("Disables depth estimation and 3D positioning to improve performance.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    if !settings.enableLiDAR && settings.enableARGraph {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text("AR Graph requires LiDAR")
+                                .font(.caption)
+                        }
+                    }
+                }
+
                 Section("AR Debug") {
                     Toggle("Enable Screen Recording", isOn: Binding(
                         get: { settings.enableScreenRecording },

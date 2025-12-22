@@ -39,7 +39,7 @@ struct SpatialFaceWidget: View {
                         ProbabilityTimelineGraph(history: history)
                             .frame(width: widgetFrame.width)
                             .padding(8)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
                             .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
                     }
                     .position(smoothedPosition)

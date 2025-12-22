@@ -20,6 +20,7 @@ class PipelineCoordinator: ObservableObject, PipelineCoordinatorProtocol {
     private var backPipeline: BackARVisionPipeline?
     private var activePipeline: CameraPipeline?
     private var isPaused: Bool = false
+    private var currentSettings: InferenceSettings = InferenceSettings()
 
     // Frame callback for inference - includes orientation for Vision alignment
     var onFrameCapture: ((CVPixelBuffer, [DetectedFace], CGImagePropertyOrientation) -> Void)?
@@ -44,7 +45,7 @@ class PipelineCoordinator: ObservableObject, PipelineCoordinatorProtocol {
     
     private func setupBackPipeline() {
         if backPipeline == nil {
-            backPipeline = BackARVisionPipeline()
+            backPipeline = BackARVisionPipeline(settings: currentSettings)
         }
         Log.info("Switching to back pipeline")
         activatePipeline(backPipeline!)
@@ -123,6 +124,20 @@ class PipelineCoordinator: ObservableObject, PipelineCoordinatorProtocol {
     func stop() {
         activePipeline?.stop(completion: nil)
         arGraphManager?.cleanup()
+    }
+
+    func updateSettings(_ settings: InferenceSettings) {
+        let lidarChanged = settings.enableLiDAR != currentSettings.enableLiDAR
+        currentSettings = settings
+
+        // Update back pipeline if it exists
+        backPipeline?.updateSettings(settings)
+
+        // Restart back pipeline if LiDAR setting changed while back camera is active
+        if lidarChanged && isBackCamera {
+            Log.info("LiDAR setting changed while back camera active, restarting pipeline")
+            setupBackPipeline()
+        }
     }
 
     // MARK: - PipelineCoordinatorProtocol

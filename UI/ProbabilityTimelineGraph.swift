@@ -37,10 +37,10 @@ struct ProbabilityTimelineGraph: View {
                 let laneY = startY + CGFloat(laneIdx) * (laneHeight + laneSpacing)
                 let laneRect = CGRect(x: margin, y: laneY, width: graphWidth, height: laneHeight)
 
-                // Background for lane
+                // Background for lane (reduced opacity for less clutter)
                 context.fill(
                     Path(roundedRect: laneRect, cornerRadius: 4),
-                    with: .color(Color.gray.opacity(0.1))
+                    with: .color(Color.gray.opacity(0.05))
                 )
 
                 // Draw probability curve for this emotion
@@ -70,19 +70,19 @@ struct ProbabilityTimelineGraph: View {
                 let isRecentlyDominant = dominantIndices.suffix(5).contains(laneIdx)
 
                 if isRecentlyDominant {
-                    // Glow effect for dominant emotion
+                    // Glow effect for dominant emotion (reduced intensity)
                     context.stroke(
                         glowPath,
-                        with: .color(emotionColors[laneIdx].opacity(0.3)),
+                        with: .color(emotionColors[laneIdx].opacity(0.2)),
                         style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round)
                     )
                 }
 
-                // Main probability curve
+                // Main probability curve (slightly thinner for cleaner look)
                 context.stroke(
                     path,
                     with: .color(emotionColors[laneIdx]),
-                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
+                    style: StrokeStyle(lineWidth: 2.0, lineCap: .round, lineJoin: .round)
                 )
 
                 // Emotion label
